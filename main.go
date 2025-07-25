@@ -57,6 +57,7 @@ func extractMetadataAndData(chunk []byte) *EmbeddedFile {
 	reader := bufio.NewReader(bytes.NewReader(chunk))
 	var filename string
 	var ext string
+	var content []byte
 
 	// Buscar FILENAME y EXT en las primeras líneas
 	for {
@@ -83,18 +84,24 @@ func extractMetadataAndData(chunk []byte) *EmbeddedFile {
 		return nil
 	}
 
-	contentIndex := bytes.Index(chunk, []byte("<?xml"))
+	contentIndex := bytes.Index(chunk, []byte("<?xml")) // xml possible content index
+
 	if contentIndex == -1 {
-		contentIndex = bytes.Index(chunk, []byte("RIFF"))
-	}
-	if contentIndex == -1 {
-		contentIndex = bytes.Index(chunk, []byte("\xFF\xD8\xFF")) // posible JPG
-	}
-	if contentIndex == -1 {
-		return nil
+		contentIndex = bytes.Index(chunk, []byte("RIFF")) // jpg possible content index
 	}
 
-	content := chunk[contentIndex:]
+	if contentIndex == -1 {
+		contentIndex = bytes.Index(chunk, []byte("\xFF\xD8\xFF")) // jpg possible content index
+	}
+
+	if contentIndex == -1 && ext == ".txt" {
+		contentIndex = FindTXTContentIndex(chunk) // txt possible content index
+	}
+
+	if contentIndex == -1 { // content not found
+		return nil
+	}
+	content = chunk[contentIndex:]
 
 	return &EmbeddedFile{
 		Filename: filename,
@@ -108,4 +115,26 @@ func generateHash() string {
 	h := sha1.New()
 	h.Write([]byte(now))
 	return fmt.Sprintf("%x", h.Sum(nil))[:8] // más corto y legible
+}
+
+func FindTXTContentIndex(chunk []byte) int {
+	index := -1
+	sigMarker := []byte("_SIG/D.C.")
+	sigIndex := bytes.Index(chunk, sigMarker)
+	if sigIndex != -1 {
+		start := sigIndex + len(sigMarker)
+
+		// find firs ASCII byte printable between A-Z, a-z, 0-9
+		for start < len(chunk) {
+			c := chunk[start]
+			if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+				break
+			}
+			start++
+		}
+
+		index = start
+	}
+
+	return index
 }
