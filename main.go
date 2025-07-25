@@ -27,7 +27,7 @@ func main() {
 
 	// Crear un directorio con hash único
 	hash := generateHash()
-	outputDir := fmt.Sprintf("extract-%s", hash)
+	outputDir := fmt.Sprintf("executions/extract-%s", hash)
 	if err := os.Mkdir(outputDir, 0755); err != nil {
 		panic(err)
 	}
