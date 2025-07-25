@@ -3,9 +3,12 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha1"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 type EmbeddedFile struct {
@@ -22,6 +25,14 @@ func main() {
 		panic(err)
 	}
 
+	// Crear un directorio con hash único
+	hash := generateHash()
+	outputDir := fmt.Sprintf("extract-%s", hash)
+	if err := os.Mkdir(outputDir, 0755); err != nil {
+		panic(err)
+	}
+	fmt.Println("Directorio de extracción:", outputDir)
+
 	// Separar por marcador `**%%DOCU`
 	chunks := bytes.Split(data, []byte("**%%DOCU"))
 
@@ -32,10 +43,11 @@ func main() {
 
 		metaAndData := extractMetadataAndData(chunk)
 		if metaAndData != nil {
-			if err := os.WriteFile(metaAndData.Filename, metaAndData.Content, 0644); err != nil {
-				fmt.Printf("Error writing file %s: %v\n", metaAndData.Filename, err)
+			outPath := filepath.Join(outputDir, metaAndData.Filename)
+			if err := os.WriteFile(outPath, metaAndData.Content, 0644); err != nil {
+				fmt.Printf("Error escribiendo %s: %v\n", outPath, err)
 			} else {
-				fmt.Println("Archivo extraído:", metaAndData.Filename)
+				fmt.Println("Archivo extraído:", outPath)
 			}
 		}
 	}
@@ -67,12 +79,10 @@ func extractMetadataAndData(chunk []byte) *EmbeddedFile {
 		}
 	}
 
-	// Si no hay nombre de archivo, saltear
 	if filename == "" {
 		return nil
 	}
 
-	// Usamos el resto del chunk como contenido
 	contentIndex := bytes.Index(chunk, []byte("<?xml"))
 	if contentIndex == -1 {
 		contentIndex = bytes.Index(chunk, []byte("RIFF"))
@@ -91,4 +101,11 @@ func extractMetadataAndData(chunk []byte) *EmbeddedFile {
 		Ext:      ext,
 		Content:  content,
 	}
+}
+
+func generateHash() string {
+	now := time.Now().String()
+	h := sha1.New()
+	h.Write([]byte(now))
+	return fmt.Sprintf("%x", h.Sum(nil))[:8] // más corto y legible
 }
